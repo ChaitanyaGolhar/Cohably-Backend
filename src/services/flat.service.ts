@@ -28,7 +28,10 @@ export async function createFlat(name: string, userId: string) {
 }
 
 export async function joinFlat(inviteCode: string, userId: string) {
-  const flat = await prisma.flat.findUnique({ where: { inviteCode } });
+  // Case-insensitive lookup to handle legacy mixed-case codes
+  const flat = await prisma.flat.findFirst({
+    where: { inviteCode: { equals: inviteCode, mode: "insensitive" } },
+  });
   if (!flat) {
     throw new AppError(404, "FLAT_NOT_FOUND", "No flat found with this invite code");
   }

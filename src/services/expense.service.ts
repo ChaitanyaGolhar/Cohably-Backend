@@ -40,33 +40,42 @@ export async function addExpense(
     const splitData: { expenseId: string; userId: string; amountOwed: number }[] = [];
 
     if (splitType === "EQUAL") {
-      // Members who owe money (everyone except the payer)
-      const owingMembers = splitMembers.filter((id) => id !== paidBy);
+      // splitMembers = participants (people who consumed/benefited)
+      // The payer may or may not be a participant.
+      const participants = splitMembers;
+      const participantCount = participants.length;
 
-      if (owingMembers.length === 0) {
-        throw new AppError(400, "INVALID_SPLIT", "At least one other member must be included in the split");
+      if (participantCount === 0) {
+        throw new AppError(400, "INVALID_SPLIT", "At least one participant must be included");
       }
 
-      const perPerson = Math.floor((amount * 100) / owingMembers.length) / 100;
-      const totalDistributed = perPerson * owingMembers.length;
+      // Each participant's share of the total expense
+      const share = Math.floor((amount * 100) / participantCount) / 100;
+      const totalDistributed = share * participantCount;
       const remainder = Math.round((amount - totalDistributed) * 100) / 100;
 
-      owingMembers.forEach((userId, index) => {
-        splitData.push({
-          expenseId: expense.id,
-          userId,
-          amountOwed: index === 0 ? perPerson + remainder : perPerson,
-        });
+      let remainderAssigned = false;
+      participants.forEach((userId) => {
+        if (userId === paidBy) {
+          // Payer is a participant — they consumed their share but owe nothing
+          // because they already paid the full amount
+          splitData.push({
+            expenseId: expense.id,
+            userId,
+            amountOwed: 0,
+          });
+        } else {
+          // Non-payer participant — they owe their share to the payer
+          // Assign any rounding remainder to the first non-payer
+          const owes = !remainderAssigned && remainder > 0 ? share + remainder : share;
+          remainderAssigned = true;
+          splitData.push({
+            expenseId: expense.id,
+            userId,
+            amountOwed: owes,
+          });
+        }
       });
-
-      // Payer's own split row (they owe 0)
-      if (splitMembers.includes(paidBy)) {
-        splitData.push({
-          expenseId: expense.id,
-          userId: paidBy,
-          amountOwed: 0,
-        });
-      }
     } else if (splitType === "CUSTOM") {
       if (!customSplits || customSplits.length === 0) {
         throw new AppError(400, "INVALID_SPLIT", "Custom splits are required for custom split type");

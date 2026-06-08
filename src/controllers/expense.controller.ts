@@ -14,7 +14,7 @@ export async function addExpense(req: Request, res: Response, next: NextFunction
       data.amount,
       data.category as Category,
       data.splitType as "EQUAL" | "CUSTOM",
-      data.splitMembers,
+      data.participants,
       data.customSplits,
       data.note
     );

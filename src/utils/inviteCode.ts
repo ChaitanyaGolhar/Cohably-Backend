@@ -1,4 +1,4 @@
-const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 /**
  * Generates a 6-character alphanumeric invite code.

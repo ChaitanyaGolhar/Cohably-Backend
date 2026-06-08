@@ -59,9 +59,9 @@ export const createExpenseSchema = z.object({
   category: categoryEnum.default("OTHER"),
   splitType: splitTypeEnum.default("EQUAL"),
   note: z.string().optional(),
-  splitMembers: z
+  participants: z
     .array(z.string().uuid("Invalid user ID"))
-    .min(1, "At least one member must be included in the split"),
+    .min(1, "At least one participant must be included"),
   customSplits: z.array(splitItemSchema).optional(),
 });
 
