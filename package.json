@@ -1,0 +1,33 @@
+{
+  "name": "cohably-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "bunx tsc --noEmit",
+    "db:generate": "bunx prisma generate",
+    "db:push": "bunx prisma db push",
+    "db:migrate": "bunx prisma migrate dev",
+    "db:studio": "bunx prisma studio",
+    "db:seed": "bun run src/db/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.9.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "pino": "^9.6.0",
+    "pino-http": "^11.0.0",
+    "pino-pretty": "^13.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.9",
+    "bun-types": "latest",
+    "prisma": "^6.9.0",
+    "typescript": "^5.7.0"
+  }
+}
