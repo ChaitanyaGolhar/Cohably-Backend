@@ -1,12 +1,14 @@
 import { prisma } from "../db/index.js";
 import { AppError } from "../utils/apiResponse.js";
 import type { PaymentMethod } from "@prisma/client";
+import { createFlatNotifications } from "./notification.service.js";
 
 export async function createRentCycle(
   flatId: string,
   month: string,
   amountPerPerson: number,
-  dueDate: string
+  dueDate: string,
+  actorId: string
 ) {
   // Check no open cycle exists
   const openCycle = await prisma.rentCycle.findFirst({
@@ -42,7 +44,7 @@ export async function createRentCycle(
     return newCycle;
   });
 
-  return await prisma.rentCycle.findUnique({
+  const result = await prisma.rentCycle.findUnique({
     where: { id: cycle.id },
     include: {
       payments: {
@@ -50,6 +52,16 @@ export async function createRentCycle(
       },
     },
   });
+
+  await createFlatNotifications(
+    flatId,
+    actorId,
+    "RENT_CREATED",
+    "Rent Cycle Created",
+    `${month} rent cycle created`
+  );
+
+  return result;
 }
 
 export async function getRentCycles(flatId: string) {
@@ -115,6 +127,14 @@ export async function markAsPaid(cycleId: string, userId: string, method: Paymen
     data: { hasPaid: true, paidAt: new Date(), method },
     include: { user: { select: { id: true, name: true, avatarUrl: true } } },
   });
+
+  await createFlatNotifications(
+    cycle.flatId,
+    userId,
+    "RENT_PAID",
+    "Rent Paid",
+    `${updated.user.name} paid ${cycle.month} rent`
+  );
 
   return updated;
 }

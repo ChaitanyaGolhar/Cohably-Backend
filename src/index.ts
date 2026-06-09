@@ -9,6 +9,7 @@ import balanceRoutes from './routes/balance.routes.js';
 import settlementRoutes from './routes/settlement.routes.js';
 import rentCycleRoutes from './routes/rentCycle.routes.js';
 import commentRoutes from './routes/comment.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
 import { errorHandler } from './middleware/errorHandler.middleware.js';
 
 const app = express();
@@ -27,6 +28,7 @@ app.use('/api/flats/:id/balances', balanceRoutes);
 app.use('/api/flats/:id/settlements', settlementRoutes);
 app.use('/api/flats/:id/rent-cycles', rentCycleRoutes);
 app.use('/api/flats/:id/expenses/:expId/comments', commentRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

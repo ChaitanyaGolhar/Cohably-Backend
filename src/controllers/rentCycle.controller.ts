@@ -11,7 +11,8 @@ export async function createRentCycle(req: Request, res: Response, next: NextFun
       req.params.id!,
       data.month,
       data.amountPerPerson,
-      data.dueDate
+      data.dueDate,
+      req.user!.userId
     );
     sendSuccess(res, cycle, 201);
   } catch (error) { next(error); }

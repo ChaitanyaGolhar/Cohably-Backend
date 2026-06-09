@@ -22,7 +22,11 @@ export async function recordSettlement(req: Request, res: Response, next: NextFu
 export async function getSettlements(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { page, limit } = paginationSchema.parse(req.query);
-    const result = await settlementService.getSettlements(req.params.id!, page, limit);
+    const filters = {
+      withUser: req.query.withUser as string | undefined,
+      currentUserId: req.user!.userId,
+    };
+    const result = await settlementService.getSettlements(req.params.id!, page, limit, filters);
     sendSuccess(res, result);
   } catch (error) { next(error); }
 }

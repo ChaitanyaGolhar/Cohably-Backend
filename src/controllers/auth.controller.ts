@@ -26,3 +26,16 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
     sendSuccess(res, profile);
   } catch (error) { next(error); }
 }
+
+export async function updateProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = req.user!.userId;
+    const { name } = req.body;
+    if (!name || name.trim().length < 2) {
+      res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Name must be at least 2 characters' } });
+      return;
+    }
+    const profile = await authService.updateProfile(userId, name.trim());
+    sendSuccess(res, profile);
+  } catch (error) { next(error); }
+}

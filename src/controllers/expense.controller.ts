@@ -29,6 +29,8 @@ export async function getExpenses(req: Request, res: Response, next: NextFunctio
       category: req.query.category as Category | undefined,
       month: req.query.month as string | undefined,
       memberId: req.query.memberId as string | undefined,
+      unsettledWith: req.query.unsettledWith as string | undefined,
+      currentUserId: req.user!.userId,
     };
     const result = await expenseService.getExpenses(req.params.id!, page, limit, filters);
     sendSuccess(res, result);

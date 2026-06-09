@@ -59,3 +59,18 @@ export async function getProfile(userId: string) {
   
   return { ...user, membership: membership ? { ...membership, flat: membership.flat } : null };
 }
+
+export async function updateProfile(userId: string, name: string) {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { name },
+    select: { id: true, name: true, email: true, avatarUrl: true, createdAt: true },
+  });
+  
+  const membership = await prisma.membership.findFirst({
+    where: { userId, isActive: true },
+    include: { flat: { select: { id: true, name: true, inviteCode: true, currency: true } } },
+  });
+  
+  return { ...user, membership: membership ? { ...membership, flat: membership.flat } : null };
+}

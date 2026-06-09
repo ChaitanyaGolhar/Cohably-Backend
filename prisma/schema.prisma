@@ -7,9 +7,179 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ──────────────────────────────────────────
-// Enums
-// ──────────────────────────────────────────
+model User {
+  id              String           @id @default(uuid())
+  name            String           @db.VarChar(100)
+  email           String           @unique @db.VarChar(255)
+  passwordHash    String           @map("password_hash")
+  avatarUrl       String?          @map("avatar_url")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  comments        ExpenseComment[]
+  paidExpenses    Expense[]        @relation("ExpensePayer")
+  createdFlats    Flat[]           @relation("FlatCreator")
+  memberships     Membership[]
+  notifications   Notification[]
+  rentPayments    RentPayment[]
+  settlementsFrom Settlement[]     @relation("SettlementFrom")
+  settlementsTo   Settlement[]     @relation("SettlementTo")
+  splits          Split[]
+
+  @@map("users")
+}
+
+model Flat {
+  id            String         @id @default(uuid())
+  name          String         @db.VarChar(100)
+  inviteCode    String         @unique @map("invite_code") @db.VarChar(10)
+  currency      String         @default("INR") @db.VarChar(5)
+  createdBy     String         @map("created_by")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  expenses      Expense[]
+  creator       User           @relation("FlatCreator", fields: [createdBy], references: [id])
+  memberships   Membership[]
+  notifications Notification[]
+  rentCycles    RentCycle[]
+  settlements   Settlement[]
+
+  @@map("flats")
+}
+
+model Membership {
+  id       String   @id @default(uuid())
+  flatId   String   @map("flat_id")
+  userId   String   @map("user_id")
+  role     Role     @default(MEMBER)
+  joinedAt DateTime @default(now()) @map("joined_at")
+  isActive Boolean  @default(true) @map("is_active")
+  flat     Flat     @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([flatId, userId])
+  @@index([flatId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Expense {
+  id         String           @id @default(uuid())
+  flatId     String           @map("flat_id")
+  paidBy     String           @map("paid_by")
+  title      String           @db.VarChar(200)
+  amount     Decimal          @db.Decimal(10, 2)
+  category   Category         @default(OTHER)
+  splitType  SplitType        @default(EQUAL) @map("split_type")
+  note       String?
+  receiptUrl String?          @map("receipt_url")
+  isDisputed Boolean          @default(false) @map("is_disputed")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+  comments   ExpenseComment[]
+  flat       Flat             @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  payer      User             @relation("ExpensePayer", fields: [paidBy], references: [id])
+  splits     Split[]
+
+  @@index([flatId])
+  @@index([paidBy])
+  @@map("expenses")
+}
+
+model Split {
+  id         String  @id @default(uuid())
+  expenseId  String  @map("expense_id")
+  userId     String  @map("user_id")
+  amountOwed Decimal @map("amount_owed") @db.Decimal(10, 2)
+  isSettled  Boolean @default(false) @map("is_settled")
+  expense    Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user       User    @relation(fields: [userId], references: [id])
+
+  @@index([expenseId])
+  @@index([userId])
+  @@map("splits")
+}
+
+model Settlement {
+  id        String        @id @default(uuid())
+  flatId    String        @map("flat_id")
+  fromUser  String        @map("from_user")
+  toUser    String        @map("to_user")
+  amount    Decimal       @db.Decimal(10, 2)
+  method    PaymentMethod @default(OTHER)
+  note      String?
+  settledAt DateTime      @default(now()) @map("settled_at")
+  flat      Flat          @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  payer     User          @relation("SettlementFrom", fields: [fromUser], references: [id])
+  payee     User          @relation("SettlementTo", fields: [toUser], references: [id])
+
+  @@index([flatId])
+  @@index([fromUser])
+  @@index([toUser])
+  @@map("settlements")
+}
+
+model RentCycle {
+  id              String        @id @default(uuid())
+  flatId          String        @map("flat_id")
+  month           String        @db.VarChar(7)
+  amountPerPerson Decimal       @map("amount_per_person") @db.Decimal(10, 2)
+  dueDate         DateTime      @map("due_date") @db.Date
+  isClosed        Boolean       @default(false) @map("is_closed")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  flat            Flat          @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  payments        RentPayment[]
+
+  @@index([flatId])
+  @@map("rent_cycles")
+}
+
+model RentPayment {
+  id          String         @id @default(uuid())
+  rentCycleId String         @map("rent_cycle_id")
+  userId      String         @map("user_id")
+  hasPaid     Boolean        @default(false) @map("has_paid")
+  paidAt      DateTime?      @map("paid_at")
+  method      PaymentMethod? @map("method")
+  rentCycle   RentCycle      @relation(fields: [rentCycleId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id])
+
+  @@unique([rentCycleId, userId])
+  @@index([rentCycleId])
+  @@index([userId])
+  @@map("rent_payments")
+}
+
+model ExpenseComment {
+  id        String   @id @default(uuid())
+  expenseId String   @map("expense_id")
+  userId    String   @map("user_id")
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+  expense   Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([expenseId])
+  @@index([userId])
+  @@map("expense_comments")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  flatId    String           @map("flat_id")
+  type      NotificationType
+  title     String           @db.VarChar(100)
+  message   String           @db.VarChar(500)
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+  flat      Flat             @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([flatId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
 
 enum Role {
   ADMIN
@@ -36,177 +206,10 @@ enum PaymentMethod {
   OTHER
 }
 
-// ──────────────────────────────────────────
-// Models
-// ──────────────────────────────────────────
-
-model User {
-  id           String   @id @default(uuid())
-  name         String   @db.VarChar(100)
-  email        String   @unique @db.VarChar(255)
-  passwordHash String   @map("password_hash")
-  avatarUrl    String?  @map("avatar_url")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  createdFlats    Flat[]           @relation("FlatCreator")
-  memberships     Membership[]
-  paidExpenses    Expense[]        @relation("ExpensePayer")
-  splits          Split[]
-  settlementsFrom Settlement[]     @relation("SettlementFrom")
-  settlementsTo   Settlement[]     @relation("SettlementTo")
-  rentPayments    RentPayment[]
-  comments        ExpenseComment[]
-
-  @@map("users")
-}
-
-model Flat {
-  id         String   @id @default(uuid())
-  name       String   @db.VarChar(100)
-  inviteCode String   @unique @map("invite_code") @db.VarChar(10)
-  currency   String   @default("INR") @db.VarChar(5)
-  createdBy  String   @map("created_by")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  // Relations
-  creator     User         @relation("FlatCreator", fields: [createdBy], references: [id])
-  memberships Membership[]
-  expenses    Expense[]
-  settlements Settlement[]
-  rentCycles  RentCycle[]
-
-  @@map("flats")
-}
-
-model Membership {
-  id       String   @id @default(uuid())
-  flatId   String   @map("flat_id")
-  userId   String   @map("user_id")
-  role     Role     @default(MEMBER)
-  joinedAt DateTime @default(now()) @map("joined_at")
-  isActive Boolean  @default(true) @map("is_active")
-
-  // Relations
-  flat Flat @relation(fields: [flatId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([flatId, userId])
-  @@index([flatId])
-  @@index([userId])
-  @@map("memberships")
-}
-
-model Expense {
-  id         String    @id @default(uuid())
-  flatId     String    @map("flat_id")
-  paidBy     String    @map("paid_by")
-  title      String    @db.VarChar(200)
-  amount     Decimal   @db.Decimal(10, 2)
-  category   Category  @default(OTHER)
-  splitType  SplitType @default(EQUAL) @map("split_type")
-  note       String?
-  receiptUrl String?   @map("receipt_url")
-  isDisputed Boolean   @default(false) @map("is_disputed")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  flat     Flat             @relation(fields: [flatId], references: [id], onDelete: Cascade)
-  payer    User             @relation("ExpensePayer", fields: [paidBy], references: [id])
-  splits   Split[]
-  comments ExpenseComment[]
-
-  @@index([flatId])
-  @@index([paidBy])
-  @@map("expenses")
-}
-
-model Split {
-  id         String  @id @default(uuid())
-  expenseId  String  @map("expense_id")
-  userId     String  @map("user_id")
-  amountOwed Decimal @map("amount_owed") @db.Decimal(10, 2)
-  isSettled  Boolean @default(false) @map("is_settled")
-
-  // Relations
-  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id])
-
-  @@index([expenseId])
-  @@index([userId])
-  @@map("splits")
-}
-
-model Settlement {
-  id        String        @id @default(uuid())
-  flatId    String        @map("flat_id")
-  fromUser  String        @map("from_user")
-  toUser    String        @map("to_user")
-  amount    Decimal       @db.Decimal(10, 2)
-  method    PaymentMethod @default(OTHER)
-  note      String?
-  settledAt DateTime      @default(now()) @map("settled_at")
-
-  // Relations
-  flat    Flat @relation(fields: [flatId], references: [id], onDelete: Cascade)
-  payer   User @relation("SettlementFrom", fields: [fromUser], references: [id])
-  payee   User @relation("SettlementTo", fields: [toUser], references: [id])
-
-  @@index([flatId])
-  @@index([fromUser])
-  @@index([toUser])
-  @@map("settlements")
-}
-
-model RentCycle {
-  id              String   @id @default(uuid())
-  flatId          String   @map("flat_id")
-  month           String   @db.VarChar(7) // Format: '2026-06'
-  amountPerPerson Decimal  @map("amount_per_person") @db.Decimal(10, 2)
-  dueDate         DateTime @map("due_date") @db.Date
-  isClosed        Boolean  @default(false) @map("is_closed")
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  // Relations
-  flat     Flat          @relation(fields: [flatId], references: [id], onDelete: Cascade)
-  payments RentPayment[]
-
-  @@index([flatId])
-  @@map("rent_cycles")
-}
-
-model RentPayment {
-  id          String         @id @default(uuid())
-  rentCycleId String         @map("rent_cycle_id")
-  userId      String         @map("user_id")
-  hasPaid     Boolean        @default(false) @map("has_paid")
-  paidAt      DateTime?      @map("paid_at")
-  method      PaymentMethod? @map("method")
-
-  // Relations
-  rentCycle RentCycle @relation(fields: [rentCycleId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id])
-
-  @@unique([rentCycleId, userId])
-  @@index([rentCycleId])
-  @@index([userId])
-  @@map("rent_payments")
-}
-
-model ExpenseComment {
-  id        String   @id @default(uuid())
-  expenseId String   @map("expense_id")
-  userId    String   @map("user_id")
-  message   String
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id])
-
-  @@index([expenseId])
-  @@index([userId])
-  @@map("expense_comments")
+enum NotificationType {
+  EXPENSE_ADDED
+  SETTLEMENT_CREATED
+  RENT_CREATED
+  RENT_PAID
+  MEMBER_JOINED
 }

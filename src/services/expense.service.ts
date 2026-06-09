@@ -1,6 +1,7 @@
 import { prisma } from "../db/index.js";
 import { AppError } from "../utils/apiResponse.js";
 import type { Category, SplitType } from "@prisma/client";
+import { createFlatNotifications } from "./notification.service.js";
 
 interface CustomSplit {
   userId: string;
@@ -11,6 +12,8 @@ interface ExpenseFilters {
   category?: Category;
   month?: string;
   memberId?: string;
+  unsettledWith?: string;
+  currentUserId?: string;
 }
 
 export async function addExpense(
@@ -114,6 +117,17 @@ export async function addExpense(
       },
     });
   });
+
+  // Await notification to ensure completion in serverless environments
+  await createFlatNotifications(
+    flatId,
+    paidBy,
+    "EXPENSE_ADDED",
+    "New Expense",
+    `${expense.payer.name} added ₹${amount} ${category} expense`
+  );
+
+  return expense;
 }
 
 export async function getExpenses(
@@ -137,6 +151,25 @@ export async function getExpenses(
   }
   if (filters?.memberId) {
     where.paidBy = filters.memberId;
+  }
+
+  if (filters?.unsettledWith && filters?.currentUserId) {
+    const unsettledWith = filters.unsettledWith;
+    const currentUserId = filters.currentUserId;
+    where.OR = [
+      {
+        paidBy: currentUserId,
+        splits: {
+          some: { userId: unsettledWith, isSettled: false, amountOwed: { gt: 0 } },
+        },
+      },
+      {
+        paidBy: unsettledWith,
+        splits: {
+          some: { userId: currentUserId, isSettled: false, amountOwed: { gt: 0 } },
+        },
+      },
+    ];
   }
 
   const [expenses, total] = await Promise.all([

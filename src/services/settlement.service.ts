@@ -1,6 +1,7 @@
 import { prisma } from "../db/index.js";
 import { AppError } from "../utils/apiResponse.js";
 import type { PaymentMethod } from "@prisma/client";
+import { createFlatNotifications } from "./notification.service.js";
 
 export async function recordSettlement(
   flatId: string,
@@ -35,13 +36,30 @@ export async function recordSettlement(
     },
   });
 
+  await createFlatNotifications(
+    flatId,
+    fromUserId,
+    "SETTLEMENT_CREATED",
+    "Payment Settled",
+    `${settlement.payer.name} settled ₹${amount} with ${settlement.payee.name}`
+  );
+
   return settlement;
 }
 
-export async function getSettlements(flatId: string, page: number = 1, limit: number = 20) {
+export async function getSettlements(flatId: string, page: number = 1, limit: number = 20, filters?: { withUser?: string; currentUserId?: string }) {
+  const where: Record<string, any> = { flatId };
+
+  if (filters?.withUser && filters?.currentUserId) {
+    where.OR = [
+      { fromUser: filters.currentUserId, toUser: filters.withUser },
+      { fromUser: filters.withUser, toUser: filters.currentUserId },
+    ];
+  }
+
   const [settlements, total] = await Promise.all([
     prisma.settlement.findMany({
-      where: { flatId },
+      where,
       include: {
         payer: { select: { id: true, name: true, avatarUrl: true } },
         payee: { select: { id: true, name: true, avatarUrl: true } },
@@ -50,7 +68,7 @@ export async function getSettlements(flatId: string, page: number = 1, limit: nu
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.settlement.count({ where: { flatId } }),
+    prisma.settlement.count({ where }),
   ]);
 
   return {

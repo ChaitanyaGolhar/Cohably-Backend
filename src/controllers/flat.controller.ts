@@ -46,3 +46,10 @@ export async function regenerateInviteCode(req: Request, res: Response, next: Ne
     sendSuccess(res, result);
   } catch (error) { next(error); }
 }
+
+export async function leaveFlat(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await flatService.leaveFlat(req.params.id!, req.user!.userId);
+    sendSuccess(res, result);
+  } catch (error) { next(error); }
+}
