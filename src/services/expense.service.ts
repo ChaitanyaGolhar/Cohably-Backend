@@ -27,7 +27,7 @@ export async function addExpense(
   customSplits?: CustomSplit[],
   note?: string
 ) {
-  return await prisma.$transaction(async (tx) => {
+  const createdExpense = await prisma.$transaction(async (tx) => {
     const expense = await tx.expense.create({
       data: {
         flatId,
@@ -43,8 +43,6 @@ export async function addExpense(
     const splitData: { expenseId: string; userId: string; amountOwed: number }[] = [];
 
     if (splitType === "EQUAL") {
-      // splitMembers = participants (people who consumed/benefited)
-      // The payer may or may not be a participant.
       const participants = splitMembers;
       const participantCount = participants.length;
 
@@ -52,40 +50,35 @@ export async function addExpense(
         throw new AppError(400, "INVALID_SPLIT", "At least one participant must be included");
       }
 
-      // Each participant's share of the total expense
       const share = Math.floor((amount * 100) / participantCount) / 100;
       const totalDistributed = share * participantCount;
       const remainder = Math.round((amount - totalDistributed) * 100) / 100;
 
       let remainderAssigned = false;
-      participants.forEach((userId) => {
-        if (userId === paidBy) {
-          // Payer is a participant — they consumed their share but owe nothing
-          // because they already paid the full amount
-          splitData.push({
-            expenseId: expense.id,
-            userId,
-            amountOwed: 0,
-          });
-        } else {
-          // Non-payer participant — they owe their share to the payer
-          // Assign any rounding remainder to the first non-payer
-          const owes = !remainderAssigned && remainder > 0 ? share + remainder : share;
+
+      for (const participantId of participants) {
+        let amountOwed = share;
+        
+        if (!remainderAssigned && remainder !== 0) {
+          amountOwed += remainder;
           remainderAssigned = true;
-          splitData.push({
-            expenseId: expense.id,
-            userId,
-            amountOwed: owes,
-          });
         }
-      });
+
+        const actualOwed = participantId === paidBy ? 0 : amountOwed;
+
+        splitData.push({
+          expenseId: expense.id,
+          userId: participantId,
+          amountOwed: actualOwed,
+        });
+      }
     } else if (splitType === "CUSTOM") {
       if (!customSplits || customSplits.length === 0) {
-        throw new AppError(400, "INVALID_SPLIT", "Custom splits are required for custom split type");
+        throw new AppError(400, "INVALID_SPLIT", "Custom splits required for CUSTOM split type");
       }
 
-      const total = customSplits.reduce((sum, s) => sum + s.amountOwed, 0);
-      const roundedTotal = Math.round(total * 100) / 100;
+      const customTotal = customSplits.reduce((sum, s) => sum + s.amountOwed, 0);
+      const roundedTotal = Math.round(customTotal * 100) / 100;
       const roundedAmount = Math.round(amount * 100) / 100;
 
       if (roundedTotal !== roundedAmount) {
@@ -118,16 +111,15 @@ export async function addExpense(
     });
   });
 
-  // Await notification to ensure completion in serverless environments
   await createFlatNotifications(
     flatId,
     paidBy,
     "EXPENSE_ADDED",
     "New Expense",
-    `${expense.payer.name} added ₹${amount} ${category} expense`
+    `${createdExpense?.payer.name} added ₹${amount} ${category} expense`
   );
 
-  return expense;
+  return createdExpense;
 }
 
 export async function getExpenses(
@@ -257,10 +249,21 @@ export async function editExpense(
   return updated;
 }
 
-export async function deleteExpense(expenseId: string) {
+export async function deleteExpense(expenseId: string, userId: string, userRole: string) {
   const expense = await prisma.expense.findUnique({ where: { id: expenseId } });
   if (!expense) {
     throw new AppError(404, "EXPENSE_NOT_FOUND", "Expense not found");
+  }
+
+  if (userRole !== "ADMIN" && expense.paidBy !== userId) {
+    throw new AppError(403, "NOT_PAYER", "Only the person who paid or an Admin can delete this expense");
+  }
+
+  if (userRole !== "ADMIN") {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    if (expense.createdAt < tenMinutesAgo) {
+      throw new AppError(403, "DELETE_WINDOW_CLOSED", "Expenses can only be deleted within 10 minutes of creation");
+    }
   }
 
   await prisma.expense.delete({ where: { id: expenseId } });

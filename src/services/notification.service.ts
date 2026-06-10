@@ -40,6 +40,27 @@ export async function createFlatNotifications(
 }
 
 /**
+ * Creates a notification for a single specific user.
+ */
+export async function createDirectNotification(
+  userId: string,
+  flatId: string,
+  type: NotificationType,
+  title: string,
+  message: string
+) {
+  await prisma.notification.create({
+    data: {
+      userId,
+      flatId,
+      type,
+      title,
+      message,
+    },
+  });
+}
+
+/**
  * Retrieves paginated notifications for a user.
  */
 export async function getNotifications(

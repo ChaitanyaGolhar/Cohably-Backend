@@ -1,24 +1,24 @@
 import { prisma } from "../db/index.js";
 import { AppError } from "../utils/apiResponse.js";
-import type { PaymentMethod } from "@prisma/client";
+import type { PaymentMethod, SplitType } from "@prisma/client";
 import { createFlatNotifications } from "./notification.service.js";
+
+interface CustomRentSplit {
+  userId: string;
+  amountOwed: number;
+}
 
 export async function createRentCycle(
   flatId: string,
   month: string,
-  amountPerPerson: number,
+  totalAmount: number,
   dueDate: string,
+  splitType: SplitType,
+  customSplits: CustomRentSplit[] | undefined,
   actorId: string
 ) {
-  // Check no open cycle exists
-  const openCycle = await prisma.rentCycle.findFirst({
-    where: { flatId, isClosed: false },
-  });
-  if (openCycle) {
-    throw new AppError(409, "OPEN_CYCLE_EXISTS", `An open rent cycle already exists for ${openCycle.month}`);
-  }
+  // Allow multiple active cycles, removed the check for openCycle
 
-  // Get all active members
   const members = await prisma.membership.findMany({
     where: { flatId, isActive: true },
   });
@@ -28,18 +28,53 @@ export async function createRentCycle(
       data: {
         flatId,
         month,
-        amountPerPerson,
+        totalAmount,
+        splitType,
         dueDate: new Date(dueDate),
       },
     });
 
-    // Create rent payment rows for all active members
-    await tx.rentPayment.createMany({
-      data: members.map((m) => ({
-        rentCycleId: newCycle.id,
-        userId: m.userId,
-      })),
-    });
+    const paymentData: { rentCycleId: string; userId: string; amountOwed: number }[] = [];
+
+    if (splitType === "EQUAL") {
+      const activeMembers = members;
+      if (activeMembers.length === 0) throw new AppError(400, "NO_MEMBERS", "No active members in flat");
+
+      const share = Math.floor((totalAmount * 100) / activeMembers.length) / 100;
+      const totalDistributed = share * activeMembers.length;
+      const remainder = Math.round((totalAmount - totalDistributed) * 100) / 100;
+
+      let remainderAssigned = false;
+      activeMembers.forEach((m) => {
+        const owes = !remainderAssigned && remainder > 0 ? share + remainder : share;
+        remainderAssigned = true;
+        paymentData.push({
+          rentCycleId: newCycle.id,
+          userId: m.userId,
+          amountOwed: owes,
+        });
+      });
+    } else if (splitType === "CUSTOM") {
+      if (!customSplits || customSplits.length === 0) {
+        throw new AppError(400, "INVALID_SPLIT", "Custom splits required");
+      }
+      const total = customSplits.reduce((sum, s) => sum + s.amountOwed, 0);
+      const roundedTotal = Math.round(total * 100) / 100;
+      const roundedAmount = Math.round(totalAmount * 100) / 100;
+      if (roundedTotal !== roundedAmount) {
+        throw new AppError(400, "SPLIT_MISMATCH", "Split amounts do not equal total amount");
+      }
+
+      for (const split of customSplits) {
+        paymentData.push({
+          rentCycleId: newCycle.id,
+          userId: split.userId,
+          amountOwed: split.amountOwed,
+        });
+      }
+    }
+
+    await tx.rentPayment.createMany({ data: paymentData });
 
     return newCycle;
   });
@@ -62,6 +97,25 @@ export async function createRentCycle(
   );
 
   return result;
+}
+
+export async function approvePayment(cycleId: string, userId: string, adminId: string) {
+  const payment = await prisma.rentPayment.findUnique({
+    where: { rentCycleId_userId: { rentCycleId: cycleId, userId } },
+    include: { rentCycle: true },
+  });
+
+  if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "Payment not found");
+  if (!payment.hasPaid) throw new AppError(400, "NOT_PAID", "Cannot approve an unpaid rent");
+  if (payment.isApproved) throw new AppError(400, "ALREADY_APPROVED", "Already approved");
+
+  const updated = await prisma.rentPayment.update({
+    where: { id: payment.id },
+    data: { isApproved: true },
+    include: { user: { select: { name: true } } },
+  });
+
+  return updated;
 }
 
 export async function getRentCycles(flatId: string) {

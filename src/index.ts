@@ -10,6 +10,10 @@ import settlementRoutes from './routes/settlement.routes.js';
 import rentCycleRoutes from './routes/rentCycle.routes.js';
 import commentRoutes from './routes/comment.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import rotationRoutes from './routes/rotation.routes.js';
+import taskRoutes from './routes/task.routes.js';
+import billReminderRoutes from './routes/billReminder.routes.js';
+import { initScheduler } from './jobs/scheduler.js';
 import { errorHandler } from './middleware/errorHandler.middleware.js';
 
 const app = express();
@@ -28,6 +32,9 @@ app.use('/api/flats/:id/balances', balanceRoutes);
 app.use('/api/flats/:id/settlements', settlementRoutes);
 app.use('/api/flats/:id/rent-cycles', rentCycleRoutes);
 app.use('/api/flats/:id/expenses/:expId/comments', commentRoutes);
+app.use('/api/flats/:id/rotations', rotationRoutes);
+app.use('/api/flats/:id/tasks', taskRoutes);
+app.use('/api/flats/:id/bill-reminders', billReminderRoutes);
 app.use('/api/notifications', notificationRoutes);
 
 // Error handler (must be last)
@@ -37,6 +44,7 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.listen(PORT, () => {
   console.log(`Cohably server running on http://localhost:${PORT}`);
+  initScheduler(); // Start the background cron jobs
 });
 
 export default app;

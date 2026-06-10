@@ -10,8 +10,10 @@ export async function createRentCycle(req: Request, res: Response, next: NextFun
     const cycle = await rentCycleService.createRentCycle(
       req.params.id!,
       data.month,
-      data.amountPerPerson,
+      data.totalAmount,
       data.dueDate,
+      data.splitType as any,
+      data.customSplits,
       req.user!.userId
     );
     sendSuccess(res, cycle, 201);
@@ -39,6 +41,17 @@ export async function markAsPaid(req: Request, res: Response, next: NextFunction
       req.params.cycleId!,
       req.user!.userId,
       data.method as PaymentMethod
+    );
+    sendSuccess(res, payment);
+  } catch (error) { next(error); }
+}
+
+export async function approvePayment(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const payment = await rentCycleService.approvePayment(
+      req.params.cycleId!,
+      req.params.userId!,
+      req.user!.userId
     );
     sendSuccess(res, payment);
   } catch (error) { next(error); }

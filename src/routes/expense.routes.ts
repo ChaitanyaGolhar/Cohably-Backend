@@ -10,6 +10,6 @@ router.post("/", authGuard, requireFlatMember, expenseController.addExpense);
 router.get("/", authGuard, requireFlatMember, expenseController.getExpenses);
 router.get("/:expId", authGuard, requireFlatMember, expenseController.getExpenseDetail);
 router.patch("/:expId", authGuard, requireFlatMember, expenseController.editExpense);
-router.delete("/:expId", authGuard, requireFlatMember, requireAdmin, expenseController.deleteExpense);
+router.delete("/:expId", authGuard, requireFlatMember, expenseController.deleteExpense);
 
 export default router;

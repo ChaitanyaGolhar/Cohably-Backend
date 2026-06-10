@@ -54,7 +54,7 @@ export async function editExpense(req: Request, res: Response, next: NextFunctio
 
 export async function deleteExpense(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = await expenseService.deleteExpense(req.params.expId!);
+    const result = await expenseService.deleteExpense(req.params.expId!, req.user!.userId, req.membership!.role);
     sendSuccess(res, result);
   } catch (error) { next(error); }
 }

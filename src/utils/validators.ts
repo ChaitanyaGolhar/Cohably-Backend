@@ -97,7 +97,9 @@ export const createRentCycleSchema = z.object({
   month: z
     .string()
     .regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
-  amountPerPerson: z.number().positive("Amount must be positive"),
+  totalAmount: z.number().positive("Amount must be positive"),
+  splitType: splitTypeEnum.default("EQUAL"),
+  customSplits: z.array(splitItemSchema).optional(),
   dueDate: z.string().refine(
     (val) => !isNaN(Date.parse(val)),
     "Invalid date format"

@@ -10,6 +10,7 @@ router.post("/", authGuard, requireFlatMember, requireAdmin, rentCycleController
 router.get("/", authGuard, requireFlatMember, rentCycleController.getRentCycles);
 router.get("/:cycleId", authGuard, requireFlatMember, rentCycleController.getRentCycleDetail);
 router.patch("/:cycleId/pay", authGuard, requireFlatMember, rentCycleController.markAsPaid);
+router.patch("/:cycleId/payments/:userId/approve", authGuard, requireFlatMember, requireAdmin, rentCycleController.approvePayment);
 router.patch("/:cycleId/close", authGuard, requireFlatMember, requireAdmin, rentCycleController.closeCycle);
 
 export default router;

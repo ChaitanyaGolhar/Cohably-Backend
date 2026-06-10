@@ -48,6 +48,9 @@ export async function joinFlat(inviteCode: string, userId: string) {
     where: { flatId_userId: { flatId: flat.id, userId } },
   });
   if (alreadyInThisFlat) {
+    if (!alreadyInThisFlat.isActive) {
+      throw new AppError(403, "CANNOT_REJOIN", "You cannot join this flat. You have been removed by an admin or you already left.");
+    }
     throw new AppError(409, "ALREADY_MEMBER", "You are already a member of this flat");
   }
 

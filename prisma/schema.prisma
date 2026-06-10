@@ -24,6 +24,16 @@ model User {
   settlementsFrom Settlement[]     @relation("SettlementFrom")
   settlementsTo   Settlement[]     @relation("SettlementTo")
   splits          Split[]
+  createdRotations     Rotation[]        @relation("RotationCreator")
+  assignedCycles       RotationCycle[]   @relation("CycleAssigned")
+  completedCycles      RotationCycle[]   @relation("CycleCompleter")
+  rotationMemberships  RotationMember[]
+  rotationLogs         RotationLog[]
+  createdTasks         Task[]            @relation("TaskCreator")
+  assignedTasks        Task[]            @relation("TaskAssignee")
+  completedTasks       Task[]            @relation("TaskCompleter")
+  responsibleBills     BillReminder[]    @relation("BillResponsible")
+  createdBills         BillReminder[]    @relation("BillCreator")
 
   @@map("users")
 }
@@ -41,6 +51,9 @@ model Flat {
   notifications Notification[]
   rentCycles    RentCycle[]
   settlements   Settlement[]
+  rotations     Rotation[]
+  tasks         Task[]
+  billReminders BillReminder[]
 
   @@map("flats")
 }
@@ -121,7 +134,8 @@ model RentCycle {
   id              String        @id @default(uuid())
   flatId          String        @map("flat_id")
   month           String        @db.VarChar(7)
-  amountPerPerson Decimal       @map("amount_per_person") @db.Decimal(10, 2)
+  totalAmount     Decimal       @default(0) @map("total_amount") @db.Decimal(10, 2)
+  splitType       SplitType     @default(EQUAL) @map("split_type")
   dueDate         DateTime      @map("due_date") @db.Date
   isClosed        Boolean       @default(false) @map("is_closed")
   createdAt       DateTime      @default(now()) @map("created_at")
@@ -136,7 +150,9 @@ model RentPayment {
   id          String         @id @default(uuid())
   rentCycleId String         @map("rent_cycle_id")
   userId      String         @map("user_id")
+  amountOwed  Decimal        @default(0) @map("amount_owed") @db.Decimal(10, 2)
   hasPaid     Boolean        @default(false) @map("has_paid")
+  isApproved  Boolean        @default(false) @map("is_approved")
   paidAt      DateTime?      @map("paid_at")
   method      PaymentMethod? @map("method")
   rentCycle   RentCycle      @relation(fields: [rentCycleId], references: [id], onDelete: Cascade)
@@ -212,4 +228,192 @@ enum NotificationType {
   RENT_CREATED
   RENT_PAID
   MEMBER_JOINED
+  ROTATION_ASSIGNED
+  ROTATION_COMPLETED
+  ROTATION_OVERDUE
+  TASK_ASSIGNED
+  TASK_COMPLETED
+  TASK_CANCELLED
+  BILL_REMINDER_DUE
+  BILL_REMINDER_OVERDUE
+  MEMBER_LEFT
+}
+
+enum RotationFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  ON_DEMAND
+}
+
+enum CycleStatus {
+  PENDING
+  COMPLETED
+  SKIPPED
+  OVERDUE
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum BillRecurrence {
+  MONTHLY
+  QUARTERLY
+  BIANNUAL
+  ANNUAL
+  CUSTOM
+}
+
+enum SchedulerStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model Rotation {
+  id           String           @id @default(uuid())
+  flatId       String           @map("flat_id")
+  name         String           @db.VarChar(100)
+  description  String?          @db.Text
+  frequency    RotationFrequency
+  frequencyDay Int?             @map("frequency_day")
+  isActive     Boolean          @default(true) @map("is_active")
+  createdBy    String           @map("created_by")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  flat         Flat             @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  creator      User             @relation("RotationCreator", fields: [createdBy], references: [id])
+  members      RotationMember[]
+  cycles       RotationCycle[]
+  logs         RotationLog[]
+
+  @@index([flatId])
+  @@map("rotations")
+}
+
+model RotationMember {
+  id         String   @id @default(uuid())
+  rotationId String   @map("rotation_id")
+  userId     String   @map("user_id")
+  isActive   Boolean  @default(true) @map("is_active")
+  joinedAt   DateTime @default(now()) @map("joined_at")
+
+  rotation   Rotation @relation(fields: [rotationId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([rotationId, userId])
+  @@index([rotationId])
+  @@map("rotation_members")
+}
+
+model RotationCycle {
+  id           String      @id @default(uuid())
+  rotationId   String      @map("rotation_id")
+  assignedTo   String      @map("assigned_to")
+  status       CycleStatus @default(PENDING)
+  dueDate      DateTime    @map("due_date") @db.Date
+  completedAt  DateTime?   @map("completed_at")
+  completedBy  String?     @map("completed_by")
+  skipReason   String?     @map("skip_reason") @db.Text
+  cycleNumber  Int         @map("cycle_number")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  rotation     Rotation    @relation(fields: [rotationId], references: [id], onDelete: Cascade)
+  assignedUser User        @relation("CycleAssigned", fields: [assignedTo], references: [id])
+  completer    User?       @relation("CycleCompleter", fields: [completedBy], references: [id])
+  logs         RotationLog[]
+
+  @@index([rotationId, status])
+  @@map("rotation_cycles")
+}
+
+model RotationLog {
+  id                String        @id @default(uuid())
+  rotationId        String        @map("rotation_id")
+  rotationCycleId   String        @map("rotation_cycle_id")
+  userId            String        @map("user_id")
+  outcome           CycleStatus   @map("outcome") // COMPLETED or SKIPPED
+  loggedAt          DateTime      @default(now()) @map("logged_at")
+
+  rotation          Rotation      @relation(fields: [rotationId], references: [id], onDelete: Cascade)
+  rotationCycle     RotationCycle @relation(fields: [rotationCycleId], references: [id], onDelete: Cascade)
+  user              User          @relation(fields: [userId], references: [id])
+
+  @@index([rotationId, userId])
+  @@map("rotation_logs")
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  flatId      String       @map("flat_id")
+  title       String       @db.VarChar(200)
+  description String?      @db.Text
+  createdBy   String       @map("created_by")
+  assignedTo  String?      @map("assigned_to")
+  status      TaskStatus   @default(PENDING)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?    @map("due_date") @db.Date
+  completedAt DateTime?    @map("completed_at")
+  completedBy String?      @map("completed_by")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  flat        Flat         @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  creator     User         @relation("TaskCreator", fields: [createdBy], references: [id])
+  assignee    User?        @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  completer   User?        @relation("TaskCompleter", fields: [completedBy], references: [id])
+
+  @@index([flatId, status])
+  @@index([flatId, assignedTo])
+  @@map("tasks")
+}
+
+model BillReminder {
+  id                 String         @id @default(uuid())
+  flatId             String         @map("flat_id")
+  title              String         @db.VarChar(200)
+  amountEstimate     Decimal?       @map("amount_estimate") @db.Decimal(10, 2)
+  category           Category       @default(OTHER)
+  recurrence         BillRecurrence
+  recurrenceDay      Int?           @map("recurrence_day")
+  customNextDate     DateTime?      @map("custom_next_date") @db.Date
+  responsibleMember  String?        @map("responsible_member")
+  remindDaysBefore   Int            @default(3) @map("remind_days_before")
+  isActive           Boolean        @default(true) @map("is_active")
+  createdBy          String         @map("created_by")
+  lastTriggeredAt    DateTime?      @map("last_triggered_at")
+  nextDueDate        DateTime       @map("next_due_date") @db.Date
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  flat               Flat           @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  responsible        User?          @relation("BillResponsible", fields: [responsibleMember], references: [id])
+  creator            User           @relation("BillCreator", fields: [createdBy], references: [id])
+
+  @@index([flatId, nextDueDate])
+  @@map("bill_reminders")
+}
+
+model SchedulerLog {
+  id                 String          @id @default(uuid())
+  jobName            String          @map("job_name") @db.VarChar(100)
+  ranAt              DateTime        @default(now()) @map("ran_at")
+  cyclesCreated      Int             @default(0) @map("cycles_created")
+  notificationsSent  Int             @default(0) @map("notifications_sent")
+  errors             String?         @db.Text
+  status             SchedulerStatus
+
+  @@map("scheduler_logs")
 }
